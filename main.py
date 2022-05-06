@@ -5,21 +5,25 @@ import dlib, cv2, os, csv
 import pandas as pd
 import numpy as np
 import threading
+import pickle
 
 from tkinter import filedialog
 from sklearn.model_selection import train_test_split
-from sklearn.svm import SVC, metrics, preprocessing
+from sklearn.svm import SVC
+
+from sklearn import metrics
+from sklearn import preprocessing
+
 from multiprocessing.pool import ThreadPool as Pool
 from threading import Thread
-
-
-
 
 #control access to the csv when multi threading the extraction
 csv_lock = threading.Lock()
 
-global clf, counter, label
-counter, totalCounter = 0
+global counter, label
+counter = 0
+totalCounter = 0
+emotions = ['anger', 'disgust', 'fear', 'joy', 'neutral', 'sadness', 'surprise']
 
 def selectFolder(): #get the user to select the folder containing the dataset
     return filedialog.askdirectory()
@@ -77,11 +81,33 @@ def thread_extract():   #start the extract function in a thread so the GUI doesn
     thread.start()
 
 def test_single():
-    global clf              #use the trained model to predict the emotion of the image
     t = selectFile()        #get the user to select an image
     sample = cv2.imread(t)
     sample = cv2.resize(sample, (640, 490), interpolation= cv2.INTER_LINEAR)    #pre-processing re-size the image
+    sample = cv2.cvtColor(sample, cv2.COLOR_BGR2GRAY)                           #make the image grayscale
+
+    f_vector = get_landmarks(sample, "test")    #get the feature vector without defining emotion
+    f_vector = f_vector[1:]                     #remove 'test' from the feature vector
+    f_vector = np.array(f_vector)               #convert to numpy array
+    f_vector = f_vector.reshape(1, -1)          #reshape for the model
+    f_vector = preprocessing.scale(f_vector)    #scale the features
+
+    #retrieve the saved model
+    with open('model.pkl', 'rb') as f:
+        clf = pickle.load(f)
+    predicted = clf.predict(f_vector)
+    predicted = int(predicted[0])
+    print(emotions[predicted])
     
+    
+    #show the image provided
+    sample = cv2.imread(t)
+    sample = cv2.resize(sample, (640, 490), interpolation= cv2.INTER_LINEAR)
+    sample = cv2.cvtColor(sample, cv2.COLOR_BGR2GRAY)
+    cv2.imshow("Classifier", sample)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
 
 def features(sample, f):
     global counter  #counter for displaying processing progress on the GUI
@@ -92,9 +118,6 @@ def features(sample, f):
         print('error extracting features')
 
     counter+=1
-
-
-
 
 def extract():  #extraction function which provides file paths and labels for the model to train
     global counter, label
@@ -125,14 +148,11 @@ def extract():  #extraction function which provides file paths and labels for th
     pool.join()
 
 
-
-
 def train():
-    global clf
     print("Training the model...")
     
     df = pd.read_csv('landmarks.csv')       #read the feature csv file 
-    df = df.drop(df.index[0])               #remove the column headers
+    #df = df.drop(df.index[0])              #remove the column headers
     le = preprocessing.LabelEncoder()       #create a label encoder
     le.fit(df['label'])                     #encode the labels
     df['label'] = le.transform(df['label']) #replace the labels with the encoded labels
@@ -143,14 +163,16 @@ def train():
     x_train = preprocessing.scale(x_train)
     x_test = preprocessing.scale(x_test)
 
+    
     clf = SVC(kernel='linear', C=1.0, random_state=0)   #create a linear SVM classifier
     clf.fit(x_train, y_train)                           #train the model using the provided features and labels
 
     print(clf.score(x_train, y_train))  #print the accuracy of the training
     print(clf.score(x_test, y_test))    #print the accuracy of the testing
 
-    #print(metrics.classification_report(y_test, y_pred))
-    #print(metrics.confusion_matrix(y_test, y_pred))
+    #save the model
+    with open('model.pkl', 'wb') as f:
+        pickle.dump(clf, f)
 
 
 
