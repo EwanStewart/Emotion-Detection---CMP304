@@ -11,79 +11,82 @@ class Features:
         
         self.calculateLeftEyeBrowLength()
         self.calculateRightEyeBrowLength()
-        self.calculateLipWidth()
+        self.calculateUpperLeftLipLength()
+        self.calculateUpperRightLipLength()
+        self.calculateLipLength()
         self.calculateLipHeight()
-        self.calculateLeftEyeHeight()
-        self.calculateRightEyeHeight()
-        self.calculateLeftEyeWidth()
-        self.calculateRightEyeWidth()
 
         return self.f_vector
 
+    def distance(self, p1, p2):
+        return math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2)
+    
 
     def calculateLeftEyeBrowLength(self):
-        l_eyebrow_left = self.landmarks.part(17).x
-        l_eyebrow_right = self.landmarks.part(21).x
-        l_eyebrow_length = l_eyebrow_right - l_eyebrow_left
-        l_eyebrow_length = l_eyebrow_length / (self.landmarks.part(16).x - self.landmarks.part(0).x)
-        self.f_vector.append(l_eyebrow_length)
+        dist = 0
+        totalDist = 0
+
+        for i in range(19, 22):
+            dist = self.distance(self.landmarks.part(i), self.landmarks.part(40))
+            dist = dist / self.distance(self.landmarks.part(0), self.landmarks.part(16))
+            totalDist += dist
+
+        self.f_vector.append(totalDist)
 
     def calculateRightEyeBrowLength(self):
-        r_eyebrow_left = self.landmarks.part(22).x
-        r_eyebrow_right = self.landmarks.part(26).x
-        r_eyebrow_length = r_eyebrow_right - r_eyebrow_left
-        r_eyebrow_length = r_eyebrow_length / (self.landmarks.part(16).x - self.landmarks.part(0).x)
-        self.f_vector.append(r_eyebrow_length)
+        dist = 0
+        totalDist = 0
 
-    def calculateLipWidth(self):
-        lip_left = self.landmarks.part(48).x
-        lip_right = self.landmarks.part(54).x
-        lip_width = lip_right - lip_left
-        lip_width = lip_width / (self.landmarks.part(16).x - self.landmarks.part(0).x)
-        self.f_vector.append(lip_width)
+        for i in range(23, 26):
+            dist = self.distance(self.landmarks.part(i), self.landmarks.part(43))
+            dist = dist / self.distance(self.landmarks.part(0), self.landmarks.part(16))
+            totalDist += dist
+
+        self.f_vector.append(totalDist)
+
+    def calculateUpperLeftLipLength(self):
+        dist = 0
+        totalDist = 0
+
+        for i in range(49, 51):
+            dist = self.distance(self.landmarks.part(i), self.landmarks.part(34))
+            dist = dist / self.distance(self.landmarks.part(0), self.landmarks.part(16))
+            totalDist += dist
+        
+        self.f_vector.append(totalDist)
+
+    def calculateUpperRightLipLength(self):
+        dist = 0
+        totalDist = 0
+
+        for i in range(53, 55):
+            dist = self.distance(self.landmarks.part(i), self.landmarks.part(34))
+            dist = dist / self.distance(self.landmarks.part(0), self.landmarks.part(16))
+            totalDist += dist
+        
+        self.f_vector.append(totalDist)
+
+    def calculateLipLength(self):
+        dist = 0
+
+        dist = self.distance(self.landmarks.part(49), self.landmarks.part(55))   
+        dist = dist / self.distance(self.landmarks.part(0), self.landmarks.part(16))
+        self.f_vector.append(dist)             
 
     def calculateLipHeight(self):
-        lip_top = self.landmarks.part(51).y
-        lip_bottom = self.landmarks.part(57).y
-        lip_height = lip_bottom - lip_top
-        lip_height = lip_height / (self.landmarks.part(16).x - self.landmarks.part(0).x)
-        self.f_vector.append(lip_height)
+        dist = 0
 
-    def calculateLeftEyeHeight(self):
-        l_eye_top = self.landmarks.part(37).y
-        l_eye_bottom = self.landmarks.part(41).y
-        l_eye_height = l_eye_bottom - l_eye_top
-        l_eye_height = l_eye_height / (self.landmarks.part(16).x - self.landmarks.part(0).x)
-        self.f_vector.append(l_eye_height)
+        dist = self.distance(self.landmarks.part(52), self.landmarks.part(58))   
+        dist = dist / self.distance(self.landmarks.part(0), self.landmarks.part(16))
+        self.f_vector.append(dist)   
 
-    def calculateRightEyeHeight(self):
-        r_eye_top = self.landmarks.part(43).y
-        r_eye_bottom = self.landmarks.part(47).y
-        r_eye_height = r_eye_bottom - r_eye_top
-        r_eye_height = r_eye_height / (self.landmarks.part(16).x - self.landmarks.part(0).x)
-        self.f_vector.append(r_eye_height)
 
-    def calculateLeftEyeWidth(self):
-        l_eye_left = self.landmarks.part(36).x
-        l_eye_right = self.landmarks.part(39).x
-        l_eye_width = l_eye_right - l_eye_left
-        l_eye_width = l_eye_width / (self.landmarks.part(16).x - self.landmarks.part(0).x)
-        self.f_vector.append(l_eye_width)
-
-    def calculateRightEyeWidth(self):
-        r_eye_left = self.landmarks.part(42).x
-        r_eye_right = self.landmarks.part(45).x
-        r_eye_width = r_eye_right - r_eye_left
-        r_eye_width = r_eye_width / (self.landmarks.part(16).x - self.landmarks.part(0).x)
-        self.f_vector.append(r_eye_width)
-
-    def calculateNoseLength(self):
-        nose_left = self.landmarks.part(27).x
-        nose_right = self.landmarks.part(30).x
-        nose_length = nose_right - nose_left
-        nose_length = nose_length / (self.landmarks.part(16).x - self.landmarks.part(0).x)
-        self.f_vector.append(nose_length)
-
+    def landmarksOnly(self, landmarks):
+        for n in range(0, 68):
+            self.f_vector.append(landmarks.part(n).x)
+            self.f_vector.append(landmarks.part(n).y)
+        
+        return self.f_vector
 
 
 

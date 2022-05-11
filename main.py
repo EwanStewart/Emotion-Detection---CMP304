@@ -1,49 +1,40 @@
 #imports
 from tkinter import *
 from Features import *
+
 import dlib, cv2, os, csv
 import pandas as pd
-import numpy as np
 import threading
-import pickle
+import matplotlib.pyplot as plt
 
 from tkinter import filedialog
 from sklearn.model_selection import train_test_split
 from sklearn.svm import SVC
-
 from sklearn import metrics
 from sklearn import preprocessing
-
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.ensemble import RandomForestClassifier
 from multiprocessing.pool import ThreadPool as Pool
 from threading import Thread
 
 #control access to the csv when multi threading the extraction
 csv_lock = threading.Lock()
-
+csv_path = "engineeredFeatures.csv"
 global counter, label
 counter = 0
 totalCounter = 0
-emotions = ['anger', 'disgust', 'fear', 'joy', 'neutral', 'sadness', 'surprise']
 
-def selectFolder(): #get the user to select the folder containing the dataset
-    return filedialog.askdirectory()
-
-def selectFile(): #get the user to select an individual image to test the model
-    return filedialog.askopenfilename()
-
-def annotate_img(sample, landmarks):    #visualise the landmarks on the image
-    for n in range(0, 68):
-        cv2.circle(sample, (landmarks.part(n).x, landmarks.part(n).y), 1, (0, 0, 255), -1)
-    return sample
 
 def engineer_features(landmarks, label):    #extract the landmarks for each image and return a vector of features with the emotion
     f = Features(landmarks)                 #create a feature object which handles which feature engineering 
     f_vector = f.run()                      #start extraction in feature obj
     f_vector.insert(0, label)               #insert label at the start of hte feature vector
+    
     return f_vector
     
 def get_landmarks(sample, label):   #using a provided image extract the landmarks from the image using the shape predictor
     datFile = "shape_predictor_68_face_landmarks.dat"
+    column_header = ['label', 'l_eb_l', 'r_eb_l', 'u_ll_l', 'u_rl_l', 'l_l', 'l_h']
     face_detector = dlib.get_frontal_face_detector()
     lm_extractor = dlib.shape_predictor(datFile)
 
@@ -54,14 +45,14 @@ def get_landmarks(sample, label):   #using a provided image extract the landmark
         f_vector = engineer_features(landmarks, label)  #get the features for the image
 
         if (label != "test"):                                           #if the image is being used for training: write to the csv file
-            if not os.path.exists('landmarks.csv'):                     #if the file doesn't exist create it
-                with open('landmarks.csv', 'w', newline='') as csvfile: #open the landmark csv file
+            if not os.path.exists(csv_path):                     #if the file doesn't exist create it
+                with open(csv_path, 'w', newline='') as csvfile: #open the landmark csv file
                     with csv_lock:                                      #thread safe lock
                         writer = csv.writer(csvfile)                    #write the column headers if first time, write the feature vector
-                        writer.writerow(['label', 'left_eyebrow_length', 'right_eyebrow_length', 'lip_width', 'lip_height', 'left_eye_height', 'right_eye_height', 'left_eye_width', 'right_eye_width'])
+                        writer.writerow(column_header)
                         writer.writerow(f_vector)
             else:                                                       #if file exists append to end
-                with open('landmarks.csv', 'a', newline='') as csvfile:
+                with open(csv_path, 'a', newline='') as csvfile:
                     with csv_lock:
                         writer = csv.writer(csvfile)
                         writer.writerow(f_vector)
@@ -69,54 +60,18 @@ def get_landmarks(sample, label):   #using a provided image extract the landmark
             return f_vector         #if the image is being used for testing: return the feature vector only
         
 
-        #uncomment to see the annotated images
-        
-        #annotated_sample = annotate_img(sample, landmarks)
-        # cv2.imshow("Annotated", annotated_sample)
-        # cv2.waitKey(0)
-        # cv2.destroyAllWindows()
-
 def thread_extract():   #start the extract function in a thread so the GUI doesn't freeze
     thread = Thread(target=extract)
     thread.start()
-
-def test_single():
-    t = selectFile()        #get the user to select an image
-    sample = cv2.imread(t)
-    sample = cv2.resize(sample, (640, 490), interpolation= cv2.INTER_LINEAR)    #pre-processing re-size the image
-    sample = cv2.cvtColor(sample, cv2.COLOR_BGR2GRAY)                           #make the image grayscale
-
-    f_vector = get_landmarks(sample, "test")    #get the feature vector without defining emotion
-    f_vector = f_vector[1:]                     #remove 'test' from the feature vector
-    f_vector = np.array(f_vector)               #convert to numpy array
-    f_vector = f_vector.reshape(1, -1)          #reshape for the model
-    f_vector = preprocessing.scale(f_vector)    #scale the features
-
-    #retrieve the saved model
-    with open('model.pkl', 'rb') as f:
-        clf = pickle.load(f)
-    predicted = clf.predict(f_vector)
-    predicted = int(predicted[0])
-    print(emotions[predicted])
-    
-    
-    #show the image provided
-    sample = cv2.imread(t)
-    sample = cv2.resize(sample, (640, 490), interpolation= cv2.INTER_LINEAR)
-    sample = cv2.cvtColor(sample, cv2.COLOR_BGR2GRAY)
-    cv2.imshow("Classifier", sample)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-
 
 def features(sample, f):
     global counter  #counter for displaying processing progress on the GUI
 
     try:
         get_landmarks(sample, f)    #get the landmarks for the image
-    except:
-        print('error extracting features')
-
+    except Exception as e:
+        print(e)
+        
     counter+=1
 
 def extract():  #extraction function which provides file paths and labels for the model to train
@@ -124,13 +79,16 @@ def extract():  #extraction function which provides file paths and labels for th
 
     print("Extracting features from dataset...")
 
-    dataset_path = "C:/Users/ewans/Desktop/cmp304-cwk2/set"     #path to the datset
-    sample, labels = []                                         #array to store the image paths and labels
-    counter, totalCounter = 0                                   #image processing progress counter
+    dataset_path = "set"     #path to the datset
+    sample = []
+    labels = []                                         #array to store the image paths and labels
+    counter = 0
+    totalCounter = 0                                   #image processing progress counter
 
     for folder in os.listdir(dataset_path):                     #for each folder in the dataset
         for image in os.listdir(dataset_path + '/' + folder):   #for each image in the labelled folder
              sample.append(cv2.imread(dataset_path + '/' + folder + '/' + image))   #append the image to the sample array
+             sample[counter] = cv2.resize(sample[counter], (640, 490), interpolation= cv2.INTER_LINEAR)
              labels.append(folder)                                                  #append the emotion of that image
              totalCounter += 1                                  #counter to determine how many images are in the dataset
 
@@ -148,31 +106,63 @@ def extract():  #extraction function which provides file paths and labels for th
     pool.join()
 
 
+
 def train():
     print("Training the model...")
     
-    df = pd.read_csv('landmarks.csv')       #read the feature csv file 
-    #df = df.drop(df.index[0])              #remove the column headers
+    df = pd.read_csv(csv_path)       #read the feature csv file 
     le = preprocessing.LabelEncoder()       #create a label encoder
     le.fit(df['label'])                     #encode the labels
     df['label'] = le.transform(df['label']) #replace the labels with the encoded labels
     
     x_train, x_test, y_train, y_test = train_test_split(df.drop('label', axis=1), df['label'],
-    test_size=0.2, shuffle=True, random_state=42)   
+    test_size=0.2, shuffle=True)   
 
     x_train = preprocessing.scale(x_train)
     x_test = preprocessing.scale(x_test)
 
     
-    clf = SVC(kernel='linear', C=1.0, random_state=0)   #create a linear SVM classifier
+    clf = SVC(kernel='linear', C=1, random_state=0)   #create a linear SVM classifier
     clf.fit(x_train, y_train)                           #train the model using the provided features and labels
 
-    print(clf.score(x_train, y_train))  #print the accuracy of the training
-    print(clf.score(x_test, y_test))    #print the accuracy of the testing
+    knn = KNeighborsClassifier(n_neighbors=1)
+    knn.fit(x_train, y_train)
 
-    #save the model
-    with open('model.pkl', 'wb') as f:
-        pickle.dump(clf, f)
+    rf = RandomForestClassifier(n_estimators=100, random_state=0)
+    rf.fit(x_train, y_train)
+
+    import seaborn as sns
+
+    print("Accuracy Training (SVM): " , clf.score(x_train, y_train))
+    print("Accuracy Testing (SVM):", clf.score(x_test, y_test))
+
+    print("Accuracy Training (KNN): " , knn.score(x_train, y_train))
+    print("Accuracy Testing (KNN):", knn.score(x_test, y_test))
+
+    print("Accuracy Training (RF): " , rf.score(x_train, y_train))
+    print("Accuracy Testing (RF):", rf.score(x_test, y_test))
+
+    svm_report = metrics.classification_report(y_test, clf.predict(x_test), target_names=['anger', 'disgust', 'fear', 'joy', 'neutral', 'sadness', 'surprise'], output_dict=True)
+    knn_report = metrics.classification_report(y_test, knn.predict(x_test), target_names=['anger', 'disgust', 'fear', 'joy', 'neutral', 'sadness', 'surprise'], output_dict=True)
+    rf_report = metrics.classification_report(y_test, rf.predict(x_test), target_names=['anger', 'disgust', 'fear', 'joy', 'neutral', 'sadness', 'surprise'], output_dict=True)
+    
+    
+
+    sns.heatmap(pd.DataFrame(svm_report).iloc[:-1, :].T, annot=True)
+    plt.title('SVM')
+    plt.tight_layout()
+    plt.show()
+
+    sns.heatmap(pd.DataFrame(knn_report).iloc[:-1, :].T, annot=True)
+    plt.title('KNN')
+    plt.tight_layout()
+    plt.show()
+
+    sns.heatmap(pd.DataFrame(rf_report).iloc[:-1, :].T, annot=True)
+    plt.title('RF')
+    plt.tight_layout()
+    plt.show()
+
 
 
 
@@ -193,10 +183,6 @@ def createWindow(): #GUI window
     trainButton.pack()
     trainButton.place(relx=0.5, rely=0.6, anchor=CENTER)
 
-    testButtonSingle = Button(window, text="Test the model on a single image", command=test_single)
-    testButtonSingle.pack()
-    testButtonSingle.place(relx=0.5, rely=0.7, anchor=CENTER)
-
     label2 = Label(window, text="Ewan Stewart - 1900598", fg="white", bg="gray", font=("Helvetica", 12))
     label2.pack()
     label2.place(relx=0.5, rely=0.9, anchor=CENTER)
@@ -206,7 +192,7 @@ def createWindow(): #GUI window
 def main():
     global window, counter, totalCounter, label
     window = createWindow()
-    label = Label(window, text=str(counter) + "/" + str(totalCounter), fg="white", bg= "gray", font=("Helvetica", 16))  
+    label = Label(window, text=str(counter) + "/" + str(totalCounter), fg="red", bg= "gray", font=("Helvetica", 16))  
     window.mainloop()
 
 if __name__ == "__main__":
